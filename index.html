@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoltaX QR Code Scanner</title>
+<meta name="description" content="VoltaX QR Code Scanner - Scan QR codes and export serial numbers to Excel instantly!">
+<meta name="theme-color" content="#F97316">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="VoltaX Scanner">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #f5f5f5;
+  --card: #ffffff;
+  --border: #e8e0d8;
+  --green: #F97316;
+  --blue: #ea6800;
+  --red: #e05500;
+  --yellow: #ffaa00;
+  --text: #1e2530;
+  --muted: #9a8878;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  min-height: 100vh;
+}
+
+/* Subtle scanline bg */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(249,115,22,0.03) 2px, rgba(249,115,22,0.03) 4px);
+  pointer-events: none; z-index: 0;
+}
+
+.app { max-width: 960px; margin: 0 auto; padding: 20px 16px; position: relative; z-index: 1; }
+
+/* ── Header ── */
+.header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 24px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-left: 5px solid #F97316;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+.logo {
+  width: 46px; height: 46px;
+  background: linear-gradient(135deg, #F97316, #ea6800);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(249,115,22,0.35);
+}
+
+.header h1 {
+  font-family: 'Orbitron', monospace;
+  font-size: 20px; font-weight: 900;
+  background: linear-gradient(90deg, #F97316, #ea6800);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  letter-spacing: 1px;
+}
+
+.header p { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+
+/* ── Stats ── */
+.stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-bottom: 18px;
+}
+
+.stat {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; text-align: center;
+}
+
+.stat-n {
+  font-family: 'Orbitron', monospace; font-size: 28px; font-weight: 700;
+  background: linear-gradient(90deg, #F97316, #ea6800);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.stat-l { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px; }
+
+/* ── Grid ── */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+@media(max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+}
+
+.card-head {
+  padding: 10px 16px;
+  background: rgba(249,115,22,0.05);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: #F97316; font-weight: 600;
+}
+
+.card-body { padding: 16px; }
+
+/* ── Camera ── */
+.cam-wrap {
+  position: relative; width: 100%; aspect-ratio: 1;
+  background: #000; border-radius: 8px; overflow: hidden;
+}
+
+#video { width: 100%; height: 100%; object-fit: cover; display: block; }
+#canvas { display: none; }
+
+.cam-idle {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; background: #050810;
+}
+
+.cam-idle .icon { font-size: 44px; opacity: 0.35; }
+.cam-idle p { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.6; }
+
+.scan-corners {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+
+.corner-box {
+  width: 55%; aspect-ratio: 1; position: relative;
+}
+
+.corner-box::before, .corner-box::after,
+.corner-box span::before, .corner-box span::after {
+  content: ''; position: absolute;
+  width: 20px; height: 20px;
+  border-color: #F97316; border-style: solid;
+}
+.corner-box::before  { top:0; left:0;  border-width: 3px 0 0 3px; }
+.corner-box::after   { top:0; right:0; border-width: 3px 3px 0 0; }
+.corner-box span::before { bottom:0; left:0;  border-width: 0 0 3px 3px; }
+.corner-box span::after  { bottom:0; right:0; border-width: 0 3px 3px 0; }
+
+.scan-beam {
+  position: absolute; left: 5%; right: 5%; height: 2px;
+  background: linear-gradient(90deg, transparent, #F97316, transparent);
+  box-shadow: 0 0 10px #F97316;
+  animation: beam 2s ease-in-out infinite;
+}
+@keyframes beam { 0%,100% { top: 8%; } 50% { top: 88%; } }
+
+/* Buttons */
+.btn {
+  width: 100%; padding: 10px; border-radius: 8px; border: none;
+  cursor: pointer; font-family: 'Rajdhani', sans-serif;
+  font-size: 14px; font-weight: 700; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all 0.2s; margin-top: 12px;
+}
+
+.btn-green {
+  background: linear-gradient(135deg, #F97316, #ea6800);
+  color: #fff; box-shadow: 0 4px 14px rgba(249,115,22,0.3);
+}
+.btn-green:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(249,115,22,0.45); }
+
+.btn-red {
+  background: rgba(255,68,85,0.12); color: var(--red);
+  border: 1px solid rgba(255,68,85,0.3);
+}
+.btn-red:hover { background: rgba(255,68,85,0.2); }
+
+.btn-outline {
+  background: rgba(249,115,22,0.07); color: #F97316;
+  border: 1px solid rgba(249,115,22,0.35); margin-top: 0;
+  padding: 8px 14px; width: auto;
+}
+.btn-outline:hover { background: rgba(249,115,22,0.15); }
+
+/* Last scanned */
+.last-scan {
+  background: #080d14; border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+  font-family: 'Orbitron', monospace; font-size: 13px;
+  min-height: 50px; word-break: break-all;
+  color: var(--muted); transition: all 0.3s;
+}
+
+.last-scan.hit {
+  border-color: #F97316;
+  background: rgba(249,115,22,0.07);
+  color: #F97316;
+}
+
+.last-scan.dupe {
+  border-color: var(--yellow);
+  background: rgba(255,204,0,0.05);
+  color: var(--yellow);
+}
+
+.label { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+
+/* Manual */
+.row { display: flex; gap: 8px; margin-top: 8px; }
+
+input[type=text] {
+  flex: 1; background: #080d14; border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text);
+  font-family: 'Rajdhani', sans-serif; font-size: 14px; outline: none;
+  transition: border-color 0.2s;
+}
+input[type=text]:focus { border-color: #F97316; }
+input[type=text]::placeholder { color: var(--muted); }
+
+/* Checkbox */
+.check-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted); cursor: pointer; margin-top: 10px;
+}
+input[type=checkbox] { accent-color: #F97316; width: 14px; height: 14px; cursor: pointer; }
+
+/* ── Table ── */
+.table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+.table-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+}
+
+.table-head h2 { font-size: 14px; font-weight: 600; }
+.table-actions { display: flex; gap: 8px; }
+
+.tbl-scroll { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; min-width: 520px; }
+
+thead th {
+  padding: 10px 16px; text-align: left;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); font-weight: 500; background: rgba(0,255,136,0.03);
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr { border-bottom: 1px solid rgba(30,39,54,0.7); transition: background 0.1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: rgba(0,255,136,0.02); }
+
+tbody td { padding: 10px 16px; font-size: 13px; }
+td.num { color: var(--muted); font-family: 'Orbitron', monospace; font-size: 11px; }
+td.serial { color: #F97316; font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700; }
+td.raw-data { color: var(--text); font-size: 12px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.dt { color: var(--muted); font-size: 11px; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 10px; letter-spacing: 1px; font-weight: 600;
+}
+.b-cam  { background: rgba(249,115,22,0.1); color: #F97316; }
+.b-man  { background: rgba(234,104,0,0.1); color: #ea6800; }
+
+.empty {
+  padding: 40px 20px; text-align: center; color: var(--muted);
+}
+.empty .e-icon { font-size: 32px; opacity: 0.3; margin-bottom: 10px; }
+.empty p { font-size: 12px; letter-spacing: 1px; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  padding: 11px 18px; border-radius: 10px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+  z-index: 9999; pointer-events: none;
+  transform: translateY(60px); opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.t-ok   { background: #F97316; color: #fff; }
+.t-warn { background: var(--yellow); color: #000; }
+.t-err  { background: var(--red); color: #fff; }
+.t-info { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+
+/* ── Confirm banner ── */
+.confirm-bar {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--card); border: 1px solid var(--red);
+  border-radius: 12px; padding: 14px 18px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13px; z-index: 9998;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.confirm-bar .cb-yes {
+  background: var(--red); color: #fff; border: none;
+  border-radius: 7px; padding: 6px 14px; cursor: pointer;
+  font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 700;
+}
+.confirm-bar .cb-no {
+  background: rgba(255,255,255,0.07); color: var(--text); border: none;
+  border-radius: 7px; padding: 6px 14px; cursor: pointer;
+  font-family: 'Rajdhani', sans-serif; font-size: 13px;
+}
+
+/* Install banner */
+.install-bar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #F97316; color: white;
+  padding: 14px 24px; border-radius: 50px;
+  display: flex; align-items: center; gap: 12px;
+  font-family: 'Rajdhani', sans-serif; font-size: 15px; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(249,115,22,0.4);
+  z-index: 9999; cursor: pointer;
+  animation: bounceIn 0.5s ease;
+  white-space: nowrap;
+}
+@keyframes bounceIn {
+  0% { transform: translateX(-50%) translateY(80px); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.install-bar .ib-close {
+  background: rgba(255,255,255,0.3); border: none; color: white;
+  border-radius: 50%; width: 24px; height: 24px; cursor: pointer;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+  font-family: sans-serif;
+}
+
+/* camera error */
+.cam-err {
+  position: absolute; inset: 0; background: rgba(6,8,16,0.95);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 16px; text-align: center;
+}
+.cam-err .e { font-size: 36px; }
+.cam-err p { font-size: 12px; color: #ff8090; line-height: 1.6; }
+.cam-err button {
+  margin-top: 6px; padding: 7px 18px;
+  background: rgba(249,115,22,0.1); color: #F97316;
+  border: 1px solid #F97316; border-radius: 8px;
+  cursor: pointer; font-family: 'Rajdhani', sans-serif; font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <svg width="36" height="50" viewBox="0 0 36 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="21,0 5,27 17,27 13,50 33,19 20,19 33,0" fill="#F97316"/>
+      </svg>
+      <div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:33px;font-weight:700;color:#1e2530;letter-spacing:-0.5px;line-height:1.05">VoltaX</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:3.5px;color:#6b7280;text-transform:uppercase;margin-top:2px">QR Code Scanner</div>
+      </div>
+    </div>
+  </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="sTotal">0</div><div class="stat-l">Total Saved</div></div>
+    <div class="stat"><div class="stat-n" id="sSession">0</div><div class="stat-l">This Session</div></div>
+    <div class="stat"><div class="stat-n" id="sDupes">0</div><div class="stat-l">Duplicates</div></div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="grid">
+
+    <!-- Camera -->
+    <div class="card">
+      <div class="card-head">⬛ Camera Scanner</div>
+      <div class="card-body">
+        <div class="cam-wrap" id="camWrap">
+          <video id="video" playsinline muted autoplay></video>
+          <canvas id="canvas"></canvas>
+
+          <div class="cam-idle" id="camIdle">
+            <div class="icon">📷</div>
+            <p>Press <strong>Start Camera</strong><br>to begin scanning QR codes</p>
+          </div>
+
+          <div class="scan-corners" id="scanCorners" style="display:none">
+            <div class="corner-box"><span></span><div class="scan-beam"></div></div>
+          </div>
+        </div>
+
+        <button class="btn btn-green" id="btnCam" onclick="toggleCam()">
+          📷 &nbsp;Start Camera
+        </button>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="card">
+      <div class="card-head">◎ Last Scanned</div>
+      <div class="card-body">
+
+        <div class="label">Serial Number Detected</div>
+        <div class="last-scan" id="lastScan">Waiting for scan…</div>
+
+        <div style="margin-top:18px">
+          <div class="label">Manual Entry</div>
+          <div class="row">
+            <input type="text" id="manIn" placeholder="Type serial number…" onkeydown="if(event.key==='Enter')doManual()">
+            <button class="btn btn-outline" onclick="doManual()">➕ Add</button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="label">Settings</div>
+          <label class="check-row">
+            <input type="checkbox" id="chkDupe"> Allow duplicate serials
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="chkBeep" checked> Beep on successful scan
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-head">
+      <h2>📋 &nbsp;Scanned Records</h2>
+      <div class="table-actions">
+        <button class="btn btn-red" style="width:auto;padding:7px 14px;margin-top:0;font-size:12px" onclick="doClear()">🗑 Clear</button>
+        <button class="btn btn-outline" style="font-size:12px" onclick="doExport()">📥 Export Excel</button>
+      </div>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Serial Number</th><th>Raw QR Data</th><th>Source</th><th>Date &amp; Time</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5"><div class="empty"><div class="e-icon">🔲</div><p>NO RECORDS YET — START SCANNING</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- SheetJS CDN -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<!-- jsQR CDN -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+<script>
+// ── State ──
+let records = [];
+let camActive = false;
+let mediaStream = null;
+let rafId = null;
+let lastRaw = null;
+let lastRawTime = 0;
+let dupeCount = 0;
+let sessionCount = 0;
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+
+// ── Serial extraction ──
+function extractSerial(raw) {
+  const clean = raw.trim();
+  const patterns = [
+    /(?:serial[_\- ]?(?:no|number|#)?|sn|s\/n)\s*[=:\s]\s*([A-Z0-9\-_./]{3,40})/i,
+    /^([A-Z0-9][A-Z0-9\-_./]{2,39})$/i,
+  ];
+  for (const p of patterns) {
+    const m = clean.match(p);
+    if (m) return m[1].toUpperCase().trim();
+  }
+  return clean.slice(0, 50).toUpperCase();
+}
+
+// ── Camera ──
+async function toggleCam() {
+  camActive ? stopCam() : await startCam();
+}
+
+async function startCam() {
+  // Clear previous error UI
+  const errEl = document.getElementById('camErr');
+  if (errEl) errEl.remove();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCamError('Camera not supported in this browser.<br>Please use Chrome or Edge on a real device.');
+    return;
+  }
+
+  try {
+    // Try environment (rear) camera first, then any
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+      });
+    } catch {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
+
+    video.srcObject = mediaStream;
+    video.onloadedmetadata = () => {
+      video.play().then(() => {
+        camActive = true;
+        document.getElementById('camIdle').style.display = 'none';
+        document.getElementById('scanCorners').style.display = 'flex';
+        const btn = document.getElementById('btnCam');
+        btn.textContent = '⏹  Stop Camera';
+        btn.style.background = 'rgba(255,68,85,0.15)';
+        btn.style.color = 'var(--red)';
+        btn.style.border = '1px solid rgba(255,68,85,0.4)';
+        btn.style.boxShadow = 'none';
+        rafId = requestAnimationFrame(tick);
+        toast('✓ Camera started', 'ok');
+      }).catch(e => showCamError('Video play failed: ' + e.message));
+    };
+
+  } catch(e) {
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      showCamError('Camera permission denied.<br>Please allow camera access in your browser and try again.');
+    } else if (e.name === 'NotFoundError') {
+      showCamError('No camera found on this device.');
+    } else {
+      showCamError('Camera error: ' + e.message);
+    }
+  }
+}
+
+function stopCam() {
+  camActive = false;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  video.srcObject = null;
+  document.getElementById('camIdle').style.display = 'flex';
+  document.getElementById('scanCorners').style.display = 'none';
+  const btn = document.getElementById('btnCam');
+  btn.textContent = '📷   Start Camera';
+  btn.style = '';
+  btn.className = 'btn btn-green';
+  toast('Camera stopped', 'info');
+}
+
+function showCamError(msg) {
+  const wrap = document.getElementById('camWrap');
+  const old = document.getElementById('camErr');
+  if (old) old.remove();
+  const div = document.createElement('div');
+  div.className = 'cam-err'; div.id = 'camErr';
+  div.innerHTML = `<div class="e">⚠️</div><p>${msg}</p><button onclick="document.getElementById('camErr').remove();document.getElementById('camIdle').style.display='flex'">Retry</button>`;
+  wrap.appendChild(div);
+  document.getElementById('camIdle').style.display = 'none';
+}
+
+// ── Scan loop ──
+function tick() {
+  if (!camActive) return;
+  if (video.readyState >= 2 && video.videoWidth > 0) {
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    try {
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (typeof jsQR !== 'undefined') {
+        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        if (code && code.data) {
+          const now = Date.now();
+          if (code.data !== lastRaw || now - lastRawTime > 3000) {
+            lastRaw = code.data;
+            lastRawTime = now;
+            addRecord(code.data, 'camera');
+          }
+        }
+      }
+    } catch(e) { /* continue scanning */ }
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+// ── Add record ──
+function addRecord(raw, source) {
+  const serial = extractSerial(raw);
+  const allowDupe = document.getElementById('chkDupe').checked;
+  const isDupe = records.some(r => r.serial === serial);
+
+  if (isDupe && !allowDupe) {
+    dupeCount++;
+    document.getElementById('sDupes').textContent = dupeCount;
+    const ls = document.getElementById('lastScan');
+    ls.textContent = '⚠ DUPLICATE: ' + serial;
+    ls.className = 'last-scan dupe';
+    toast('Duplicate: ' + serial, 'warn');
+    return;
+  }
+
+  const rec = { serial, raw, source, time: new Date() };
+  records.unshift(rec);
+  sessionCount++;
+
+  document.getElementById('sTotal').textContent = records.length;
+  document.getElementById('sSession').textContent = sessionCount;
+
+  const ls = document.getElementById('lastScan');
+  ls.textContent = serial;
+  ls.className = 'last-scan hit';
+  setTimeout(() => ls.classList.remove('hit'), 2000);
+
+  if (document.getElementById('chkBeep').checked) beep();
+  renderTable();
+  toast('✓ Saved: ' + serial, 'ok');
+}
+
+// ── Manual ──
+function doManual() {
+  const inp = document.getElementById('manIn');
+  const v = inp.value.trim();
+  if (!v) { toast('Enter a serial number', 'warn'); return; }
+  addRecord(v, 'manual');
+  inp.value = '';
+}
+
+// ── Table ──
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  if (!records.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="e-icon">🔲</div><p>NO RECORDS YET — START SCANNING</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map((r, i) => `
+    <tr>
+      <td class="num">${records.length - i}</td>
+      <td class="serial">${r.serial}</td>
+      <td class="raw-data" title="${r.raw}">${r.raw}</td>
+      <td><span class="badge ${r.source === 'camera' ? 'b-cam' : 'b-man'}">${r.source === 'camera' ? '📷 CAM' : '✏ MANUAL'}</span></td>
+      <td class="dt">${r.time.toLocaleDateString()} ${r.time.toLocaleTimeString()}</td>
+    </tr>`).join('');
+}
+
+// ── Export Excel ──
+function doExport() {
+  if (!records.length) { toast('No records to export', 'warn'); return; }
+
+  try {
+    const rows = [['No.', 'Serial Number', 'Raw QR Data', 'Source', 'Date', 'Time']];
+    records.forEach((r, i) => rows.push([
+      records.length - i, r.serial, r.raw, r.source,
+      r.time.toLocaleDateString(), r.time.toLocaleTimeString()
+    ]));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:5},{wch:24},{wch:40},{wch:10},{wch:14},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, 'VoltaX Serials');
+
+    const out  = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'VoltaX_Serials_' + new Date().toISOString().slice(0,10) + '.xlsx';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+    toast('📥 Excel file downloaded!', 'ok');
+  } catch(e) {
+    toast('Export failed: ' + e.message, 'err');
+  }
+}
+
+// ── Clear ──
+function doClear() {
+  if (!records.length) { toast('Nothing to clear', 'info'); return; }
+  const old = document.getElementById('confirmBar');
+  if (old) { old.remove(); return; }
+
+  const bar = document.createElement('div');
+  bar.className = 'confirm-bar'; bar.id = 'confirmBar';
+  bar.innerHTML = `
+    <span>Clear <strong style="color:var(--red)">${records.length}</strong> records?</span>
+    <button class="cb-yes" onclick="execClear()">Yes, Clear</button>
+    <button class="cb-no"  onclick="document.getElementById('confirmBar').remove()">Cancel</button>`;
+  document.body.appendChild(bar);
+  setTimeout(() => { const b = document.getElementById('confirmBar'); if(b) b.remove(); }, 6000);
+}
+
+function execClear() {
+  const b = document.getElementById('confirmBar'); if(b) b.remove();
+  records = []; sessionCount = 0; dupeCount = 0; lastRaw = null;
+  document.getElementById('sTotal').textContent = 0;
+  document.getElementById('sSession').textContent = 0;
+  document.getElementById('sDupes').textContent = 0;
+  document.getElementById('lastScan').textContent = 'Waiting for scan…';
+  document.getElementById('lastScan').className = 'last-scan';
+  renderTable();
+  toast('All records cleared', 'info');
+}
+
+// ── Beep ──
+function beep() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type = 'sine'; o.frequency.value = 1000;
+    g.gain.setValueAtTime(0.25, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.12);
+    o.start(); o.stop(ac.currentTime + 0.12);
+  } catch(e){}
+}
+
+// ── Toast ──
+let toastTimer;
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show t-${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── PWA Install ──
+let installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  showInstallBar();
+});
+
+function showInstallBar() {
+  const existing = document.getElementById('installBar');
+  if (existing) return;
+  const bar = document.createElement('div');
+  bar.className = 'install-bar'; bar.id = 'installBar';
+  bar.innerHTML = `
+    <span>⚡ Install VoltaX App!</span>
+    <button onclick="installApp()" style="background:white;color:#F97316;border:none;border-radius:20px;padding:6px 16px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;font-size:14px">Install</button>
+    <button class="ib-close" onclick="document.getElementById('installBar').remove()">✕</button>
+  `;
+  document.body.appendChild(bar);
+}
+
+async function installApp() {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  const result = await installPrompt.userChoice;
+  if (result.outcome === 'accepted') {
+    toast('✅ VoltaX installed!', 'ok');
+    document.getElementById('installBar').remove();
+  }
+  installPrompt = null;
+}
+
+window.addEventListener('appinstalled', () => {
+  toast('✅ VoltaX App installed successfully!', 'ok');
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('VoltaX SW registered'))
+      .catch(e => console.log('SW error:', e));
+  });
+}
+</script>
+</body>
+</html>
