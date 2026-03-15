@@ -10,9 +10,22 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="VoltaX Scanner">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="data:application/json,{
+  &quot;name&quot;: &quot;VoltaX QR Code Scanner&quot;,
+  &quot;short_name&quot;: &quot;VoltaX&quot;,
+  &quot;description&quot;: &quot;Scan QR codes and export to Excel&quot;,
+  &quot;start_url&quot;: &quot;.&quot;,
+  &quot;display&quot;: &quot;standalone&quot;,
+  &quot;background_color&quot;: &quot;#f5f5f5&quot;,
+  &quot;theme_color&quot;: &quot;#F97316&quot;,
+  &quot;orientation&quot;: &quot;portrait&quot;,
+  &quot;icons&quot;: [{
+    &quot;src&quot;: &quot;data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23F97316'/><polygon points='60,5 25,55 48,55 38,95 78,42 54,42 70,5' fill='white'/></svg>&quot;,
+    &quot;sizes&quot;: &quot;any&quot;,
+    &quot;type&quot;: &quot;image/svg+xml&quot;,
+    &quot;purpose&quot;: &quot;any maskable&quot;
+  }]
+}">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
 
@@ -362,11 +375,8 @@ td.dt { color: var(--muted); font-size: 11px; }
   <!-- Header -->
   <div class="header">
     <div style="display:flex;align-items:center;gap:12px;">
-      <svg width="36" height="50" viewBox="0 0 36 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="21,0 5,27 17,27 13,50 33,19 20,19 33,0" fill="#F97316"/>
-      </svg>
       <div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:33px;font-weight:700;color:#1e2530;letter-spacing:-0.5px;line-height:1.05">VoltaX</div>
+        <div style="font-family:'Orbitron',monospace;font-size:36px;font-weight:900;color:#F97316;letter-spacing:2px;line-height:1.05">VoltaX</div>
         <div style="font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:3.5px;color:#6b7280;text-transform:uppercase;margin-top:2px">QR Code Scanner</div>
       </div>
     </div>
@@ -781,15 +791,6 @@ async function installApp() {
 window.addEventListener('appinstalled', () => {
   toast('✅ VoltaX App installed successfully!', 'ok');
 });
-
-// Register Service Worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('VoltaX SW registered'))
-      .catch(e => console.log('SW error:', e));
-  });
-}
 </script>
 </body>
 </html>
